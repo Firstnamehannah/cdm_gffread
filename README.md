@@ -75,6 +75,6 @@ cd test && ./run_test.sh
 
 `run_test.sh` covers the three cases the WILDS module tests, plus one error case:
 - a bacterial GTF (exon count should jump),
-- a eukaryotic GTF (exon count should stay about the same),
 - a bacterial GFF3 (converted, then normalized),
+- a eukaryotic GTF (exon count should stay about the same),
 - no input file (should fail with a clear message).

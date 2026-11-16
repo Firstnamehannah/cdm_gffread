@@ -25,7 +25,6 @@ run test_in gff3_to_gtf OUTPUT_PREFIX=ecoli_from_gff "/in/$BACTERIA_GFF"
 run out normalize_gtf OUTPUT_PREFIX=ecoli_from_gff.normalized /in/ecoli_from_gff.gtf
 echo "   exons before: $(exons "test_in/$BACTERIA_GFF")   after: $(exons out/ecoli_from_gff.normalized.gtf)"
 
-
 echo "== 3. Eukaryotic GTF → normalize_gtf (exons should stay about the same)"
 run test_in normalize_gtf OUTPUT_PREFIX=yeast.normalized "/in/$EUKARYOTE_GTF"
 echo "   exons before: $(exons "test_in/$EUKARYOTE_GTF")   after: $(exons out/yeast.normalized.gtf)"
