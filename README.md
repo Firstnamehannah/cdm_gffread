@@ -1,136 +1,80 @@
-# cdm_tool_skeleton
+# cdm_gffread
 
-Template for wrapping bioinformatics tools as [CTS (CDM Task Service)](https://github.com/kbase/cdm-task-service) jobs.
+CTS (CDM Task Service) job wrapper for [gffread](https://github.com/gpertea/gffread), which prepares GTF/GFF3 gene annotations for RNA-seq tools. It runs the two tasks of the WILDS [ww-gffread](https://github.com/getwilds/wilds-wdl-library/tree/main/modules/ww-gffread) module, `normalize_gtf` and `gff3_to_gtf`, with the same commands and output names.
 
-Copy this repo to create a new tool: `kbaseincubator/cdm_{toolname}`.
+## Container
 
----
+Wraps the WILDS image [`getwilds/gffread`](https://hub.docker.com/r/getwilds/gffread) (v0.12.7), adding a non-root user and an entrypoint.
 
-## Quick Start
+Published to `ghcr.io/firstnamehannah/cdm_gffread`.
 
-1. **Copy this repo** → rename to `kbaseincubator/cdm_{toolname}`
-2. **Edit `Dockerfile`** → swap in the real tool image and entrypoint
-3. **Push / tag a release** → GitHub Actions builds and pushes to GHCR automatically
-4. **Ask a CTS admin to register the image** (see `docs/pattern.md` — regular users cannot register images)
-5. **Create a demo notebook** at `global_share/{your_username}/{toolname}_demo.ipynb` on hub.berdl.kbase.us
-6. **Submit a job** and verify output lands in MinIO
-7. **Write an importer** (PR to `kbase/cdm-spark-events-importers`) to load results into Delta Lake
+**Entrypoint:** `gtf_prep` (`gtf_prep.sh`). The first argument is the task:
+- `normalize_gtf <input.gtf>`: removes `gene` rows, then runs `gffread -T --force-exons`, so every transcript has exon rows.
+- `gff3_to_gtf <input.gff3>`: removes rows with strand `?`, then runs `gffread -T`.
+- `gffread <args>`: runs gffread directly.
 
-See `docs/pattern.md` for the full pattern with examples.
+Each task is two commands (a filter, then gffread). CTS runs a single entrypoint, so the wrapper runs them in order.
 
----
+**Reference data:** none.
 
-## One image vs. multiple image variants
+## Usage via CTS
 
-Before creating a new tool repo, decide whether the tool needs a single image (the default) or a pair / set of variant images each registered separately in CTS.
+### Example
 
-**Use variant images when EITHER applies:**
-
-1. **Upstream ships multiple binaries** that take different inputs or do different things. Wrap each binary as its own image.
-   - Live example: `cdm_bakta` wraps the `bakta` binary (nucleotide assembly in, predicts genes); `cdm_bakta_proteins` wraps the `bakta_proteins` binary (protein FASTA in, preserves caller's locus tags). Same upstream package, two distinct commands, so two registered images.
-
-2. **Same binary, two different use cases with different reference-data requirements.** Most often: a "use this tool on user input alone" mode (no refdata) vs a "search user input against a fixed reference panel" mode (large refdata).
-   - Planned: `cdm_mmseqs2` (already live, no refdata, `easy-cluster` on user proteins) vs `cdm_mmseqs2_gtdb` (new, with a pre-built GTDB protein DB as refdata, `easy-search`).
-   - Planned: `cdm_skani` (no refdata, pairwise on user genomes) vs `cdm_skani_gtdb` (with pre-built GTDB sketches as refdata, ANI against the GTDB representative panel).
-
-**Stay with a single image when:**
-
-- The tool always needs the same reference data regardless of how it's used (e.g., `cdm_gtdbtk` always needs the GTDB-Tk DB; there is no useful "without refdata" mode).
-- Different invocations differ only by argv flags that don't change the refdata requirement. Let the caller pass those at submit time rather than baking a second image.
-
-**Why split rather than handle modes with argv flags?**
-
-- CTS registers each (image, refdata) pair once with its own usage notes. Two registered tools is cleaner provenance than one tool whose docs say "if mode A use refdata X, if mode B use refdata Y."
-- Different refdata bundles are distinct registered entities in CTS, each with its own UUID. A single image with multiple modes would force callers to remember which refdata UUID pairs with which mode.
-- Each variant can be versioned, tested, and refreshed independently. If the GTDB protein DB gets a new release, `cdm_mmseqs2_gtdb` re-registers without touching `cdm_mmseqs2` (which has no refdata at all) or the gtdbtk DB.
-
----
-
-## Repo Structure
-
-```
-cdm_{toolname}/
-├── Dockerfile                     # Wraps the tool — the only thing that changes per tool
-├── .github/workflows/
-│   └── docker-publish.yaml        # CI/CD: builds + pushes to ghcr.io/kbaseincubator/cdm_{toolname}
-├── docs/
-│   └── pattern.md                 # Full CTS tool pattern documentation
-├── README.md
-└── LICENSE.md
+```python
+job = tscli.submit_job(
+    "ghcr.io/firstnamehannah/cdm_gffread:0.1.0@sha256:<digest>",
+    ["cts/io/<you>/rnaseq/ref/annotation.gtf.gz"],   # one GTF (or GFF3 for gff3_to_gtf)
+    "cts/io/<you>/output/gffread/run1",
+    cluster="kbase",
+    declobber=True,
+    output_mount_point="/out",
+    args=[
+        "normalize_gtf",                 # or "gff3_to_gtf"
+        # "OUTPUT_PREFIX=ecoli.normalized",   # optional: output name without .gtf
+        tscli.insert_files(),
+    ],
+    num_containers=1,                    # one input file per job
+    cpus=1,
+    memory="4GB",
+    runtime="PT30M",
+)
 ```
 
-Demo notebooks and importers live in separate repos (see `docs/pattern.md`).
+Input files must be in MinIO with CRC64NVME checksums (`aws s3 cp ... --checksum-algorithm CRC64NVME`). Gzipped inputs (`.gtf.gz`, `.gff3.gz`) are read directly.
 
----
+**GFF3 input.** Run `gff3_to_gtf` first, then `normalize_gtf` on its `converted.gtf`. If a source offers both a GTF and a GFF3, use the GTF.
 
-## Tools Status
+**Why normalize.** STAR (GeneCounts) and RSeQC only count `exon` rows. NCBI bacterial annotations describe most genes with `CDS` rows only, so without this step those genes silently get zero counts. Eukaryotic GTFs that already have exons come through unchanged. This is important for downstream analysis in an RNA-seq pipeline.
 
-Status legend:
-- **Live**: image registered in CTS, tested end-to-end, importer deployed
-- **Image registered**: image registered in CTS, demo notebook works, importer in progress
-- **Awaiting registration**: repo + image built and public on GHCR, refdata staged in MinIO if needed, waiting on CTS admin to register
-- **Repo built**: GitHub repo + GHCR image done, no refdata work yet
-- **Planned**: not started
+**Why the filters.** These are two gffread 0.12.7 quirks:
+- NCBI GTFs put `transcript_id ""` on `gene` rows, and gffread stops with `Error: no valid ID found for GFF record`.
+- GFF3 allows strand `?`, which gffread can't parse.
 
-| Tool | Repo | Image | Refdata | Status |
-|------|------|-------|---------|--------|
-| mmseqs2 | [cdm_mmseqs2](https://github.com/kbaseincubator/cdm_mmseqs2) | `0.1.0` | no | Live end-to-end (demo: all 5,802 proteins from 4 genomes clustered into 4,558 clusters). Importer PR pending merge ([cdm-spark-events-importers#35](https://github.com/kbase/cdm-spark-events-importers/pull/35)). |
-| mmseqs2_gtdb | n/a | n/a | TBD: build from `gtdb_proteins_aa_reps_r232.tar.gz` (122 GB compressed; GTDB ships no pre-built mmseqs2 DB) | **Shelved 2026-05-22 after scoping** (full design notes in [`docs/shelved_mmseqs2_gtdb.md`](docs/shelved_mmseqs2_gtdb.md)). Bundle size + build cost made the scope decision worth pausing on rather than rushing. Recommended path on resume: linclust-90% dereplicated DB (~150-250 GB) built via a CTS bootstrap job using the existing `cdm_mmseqs2:0.1.0` image. |
-| kofamscan | [cdm_kofamscan](https://github.com/kbaseincubator/cdm_kofamscan) | `0.1.0` | `cts-refdata/kofam/2025-04-30/kofam_refdata.tar.gz` (UUID `84b31af0-…`) | Live end-to-end (demo on 4 genomes: 2,769 KO assignments, i.e. `*` rows, out of 147,510 HMM hits). Importer PR pending ([cdm-spark-events-importers#42](https://github.com/kbase/cdm-spark-events-importers/pull/42)). |
-| bakta | [cdm_bakta](https://github.com/kbaseincubator/cdm_bakta) | `0.1.3` | `cts-refdata/bakta/v6.0_amr20260324/bakta_db.tar.gz` (UUID `30f8ba11-…`) | Live end-to-end (validated on CTS: 4/4 containers complete in ~11 min wall time across the 4 test genomes). 0.1.3 overlays diamond v2.2.0 to fix the intermittent pseudogene-detection deadlock that affected 0.1.2; see closed issues #8 and #12. Importer optional, deferred. |
-| bakta_proteins | [cdm_bakta_proteins](https://github.com/kbaseincubator/cdm_bakta_proteins) | `0.1.0` | shares the bakta bundle (UUID `30f8ba11-…`) | Live end-to-end (validated on CTS: 4/4 containers complete in ~9 min wall time, all 5,802 input locus tags round-trip exactly). Variant of `cdm_bakta` for the proteins-in mode: annotates pre-called protein FASTA without re-predicting genes, preserving the caller's locus tags. Same diamond v2.2.0 overlay as `cdm_bakta:0.1.3`. |
-| psortb | [cdm_psortb](https://github.com/kbaseincubator/cdm_psortb) | `0.1.2` (0.1.3 pending registration) | none (bundled in image) | Live. 0.1.2 has two silent failures (empty input, several inputs per container); 0.1.3 fixes both. 0.1.0 and 0.1.1 are obsolete (broken). |
-| gtdbtk | [cdm_gtdbtk](https://github.com/kbaseincubator/cdm_gtdbtk) | `0.1.1` | `cts-refdata/gtdbtk/r232/gtdbtk_r232_data.tar.gz` (UUID `bb6352b4-…`) | Live end-to-end (validated on CTS: classify_wf on the 4 test genomes completes in 3.7 min, taxonomy assigned to species level for all 4). Single image (no variant split) because gtdbtk always needs the GTDB DB. Tied to R232; future GTDB releases will need a new image. |
-| eggNOG | — | — | eggNOG DB | Planned |
-| RAST | — | — | none | Planned (custom container, needs upstream coordination) |
-| transyt | — | — | none | Planned (custom container) |
-| modelseedpy | — | — | none | Planned (custom container from upstream maintainer) |
-| skani | [cdm_skani](https://github.com/kbaseincubator/cdm_skani) | `0.1.0` | none (generic ANI) | Live end-to-end (CTS sanity job: `triangle` on the 4 test genomes runs in ~40s, exit 0). Pinned to skani 0.3.1, the version bundled in `ecogenomic/gtdbtk:2.7.2` (so sketches the gtdbtk image built are guaranteed compatible). Closed [#20](https://github.com/kbaseincubator/cdm_tool_skeleton/issues/20). |
-| skani_gtdb | [cdm_skani_gtdb](https://github.com/kbaseincubator/cdm_skani_gtdb) | `0.1.0` | reuses gtdbtk R232 UUID `bb6352b4-...` (skani sketches at `/ref_data/release232/skani/database/`) | Live end-to-end (CTS sanity job: Zinderia matches own GTDB rep at 100% ANI; cross-check vs gtdbtk's `closest_genome_reference` agrees on all 4 test genomes). Same skani 0.3.1 binary as cdm_skani; registered against the existing gtdbtk refdata bundle so both tools resolve closest-reference IDs to the same GTDB R232 release. Closed [#21](https://github.com/kbaseincubator/cdm_tool_skeleton/issues/21). |
+The rows removed are redundant gene rows and non-gene features such as origins of replication.
+## Output
 
-### Demo notebooks
+- `normalize_gtf` → `normalized.gtf`: every transcript has `exon` rows (`CDS` rows are kept). Use it for BED conversion (RSeQC) and STAR index building.
+- `gff3_to_gtf` → `converted.gtf`: the annotation as GTF, input for `normalize_gtf`.
 
-Each registered tool ships with an executed demo notebook in its own repo, showing the end-to-end submit/poll/consume flow against shared test inputs with cell outputs preserved. GitHub renders these inline so anyone can read them without logging into berdl. They are the reference implementations for the build/deploy lifecycle: when wrapping a new tool, copy the closest one as a template.
+Set `OUTPUT_PREFIX=<name>` after the task to change the output name.
 
-| Tool | Demo notebook |
-|------|---------------|
-| mmseqs2 | [`cdm_mmseqs2/demo.ipynb`](https://github.com/kbaseincubator/cdm_mmseqs2/blob/main/demo.ipynb) |
-| kofamscan | [`cdm_kofamscan/demo.ipynb`](https://github.com/kbaseincubator/cdm_kofamscan/blob/main/demo.ipynb) |
-| bakta | [`cdm_bakta/demo.ipynb`](https://github.com/kbaseincubator/cdm_bakta/blob/main/demo.ipynb) |
-| bakta_proteins | [`cdm_bakta_proteins/demo.ipynb`](https://github.com/kbaseincubator/cdm_bakta_proteins/blob/main/demo.ipynb) |
-| psortb | [`cdm_psortb/demo.ipynb`](https://github.com/kbaseincubator/cdm_psortb/blob/main/demo.ipynb) |
-| gtdbtk | [`cdm_gtdbtk/demo.ipynb`](https://github.com/kbaseincubator/cdm_gtdbtk/blob/main/demo.ipynb) |
-| skani | [`cdm_skani/demo.ipynb`](https://github.com/kbaseincubator/cdm_skani/blob/main/demo.ipynb) |
-| skani_gtdb | [`cdm_skani_gtdb/demo.ipynb`](https://github.com/kbaseincubator/cdm_skani_gtdb/blob/main/demo.ipynb) |
+Normalizing keeps only the core attributes (`transcript_id`, `gene_id`, `gene_name`) and drops extras such as `gene_biotype` and `product`. When labeling genes downstream (e.g. DESeq2 results), use the original GTF or `converted.gtf`, not `normalized.gtf`.
 
-To run a demo yourself, open the corresponding notebook from `global_share/jplfaria/` on hub.berdl.kbase.us (these copies are kept in sync with the per-repo versions).
+The job fails, with a message saying what to fix, if:
+- it gets anything other than exactly one input of the right type for the task,
+- `normalized.gtf` would have no exon rows,
+- `converted.gtf` would be empty.
 
-External / not built via this skeleton:
-- **checkm2** — `ghcr.io/kbasetest/cdm_checkm2:0.3.0` (existing reference example, predates this skeleton)
-- **InterProScan** — external container (deployed to dev only, currently broken)
+## Testing locally
 
----
+```bash
+docker build -t cdm_gffread:test .
+cd test && ./run_test.sh
+```
 
-## Open PRs and Pending Handoffs
-
-Things waiting on others. Update as items move.
-
-### Open PRs
-
-| PR | Tool | Description | Waiting on |
-|----|------|-------------|------------|
-| [kbase/cdm-spark-events-importers#35](https://github.com/kbase/cdm-spark-events-importers/pull/35) | mmseqs2 | First importer for the cluster TSV output. CI green, ready to merge. | CTS admin (review + merge + redeploy event processor) |
-
-### Pending CTS admin registrations
-
-Tracked as GitHub issues with task list checkboxes the CTS admin ticks off as each step completes. Templates and archive in [`handoffs/`](handoffs/).
-
-Currently open: none.
-
-Recently closed:
-- [#20 cdm_skani 0.1.0](https://github.com/kbaseincubator/cdm_tool_skeleton/issues/20): registered, sanity green, demo notebook executed and pushed. Closed 2026-05-22.
-- [#21 cdm_skani_gtdb 0.1.0](https://github.com/kbaseincubator/cdm_tool_skeleton/issues/21): registered + bound to existing gtdbtk R232 UUID `bb6352b4-...`, re-registered with corrected `-d /ref_data/release232/skani/database/` path in usage_notes, sanity green (matches gtdbtk's `closest_genome_reference` perfectly on all 4 test genomes). Closed 2026-05-22.
-
-Refdata path convention: `cts-refdata/{toolname}/{refdata_version}/{filename}`. The path version is the **refdata version**, not the tool version. See [`handoffs/README.md`](handoffs/README.md) for full conventions and process for adding new handoffs.
-
-**Source of truth for what is actually registered**: query the CTS API directly at [`GET /refdata/`](https://berdl.kbase.us/apis/cts/docs#/Reference%20Data/get_refdata_refdata_get) and [`GET /images/{image_id}`](https://berdl.kbase.us/apis/cts/docs). The tables above describe intent; the API describes reality.
+`run_test.sh` covers the three cases the WILDS module tests, plus one error case:
+- a bacterial GTF (exon count should jump),
+- a eukaryotic GTF (exon count should stay about the same),
+- a bacterial GFF3 (converted, then normalized),
+- no input file (should fail with a clear message).

@@ -28,6 +28,19 @@
 #
 # =============================================================================
 
-FROM replaceme/tool:version
+# Option A: wrap the WILDS image used by the ww-gffread module.
+FROM getwilds/gffread:0.12.7
 
-ENTRYPOINT ["tool-command"]
+# The module's tasks are two commands each (awk filter, then gffread); CTS runs one.
+COPY gtf_prep.sh /usr/local/bin/gtf_prep
+RUN chmod 755 /usr/local/bin/gtf_prep
+
+# CTS requires non-root. Ubuntu 24.04 already has uid 1000 ("ubuntu"), so reuse it.
+# CTS only allows writes to /out and temp, so HOME points at /tmp.
+RUN id -u 1000 >/dev/null 2>&1 || useradd --create-home --uid 1000 cts
+ENV HOME=/tmp
+WORKDIR /tmp
+USER 1000
+
+ENTRYPOINT ["gtf_prep"]
+
