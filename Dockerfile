@@ -29,7 +29,7 @@
 # =============================================================================
 
 # Option A: wrap the WILDS image used by the ww-gffread module.
-FROM getwilds/gffread:0.12.7@sha256:ea407cbb15265e4f5d56c9e18673d0e248752e5969638c0c4786567c95a506ce 
+FROM getwilds/gffread:0.12.7@sha256:ea407cbb15265e4f5d56c9e18673d0e248752e5969638c0c4786567c95a506ce
 
 # The module's tasks are two commands each (awk filter, then gffread); CTS runs one.
 COPY gtf_prep.sh /usr/local/bin/gtf_prep

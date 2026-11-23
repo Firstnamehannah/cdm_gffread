@@ -23,7 +23,7 @@ Each task is two commands (a filter, then gffread). CTS runs a single entrypoint
 
 ```python
 job = tscli.submit_job(
-    "ghcr.io/firstnamehannah/cdm_gffread:0.1.0@sha256:4852e2b8609ca2360b8c5d5757e1bf8af104b44327477bc4b97baaf48d2ba9a2",
+    "ghcr.io/firstnamehannah/cdm_gffread:0.1.1@sha256:4852e2b8609ca2360b8c5d5757e1bf8af104b44327477bc4b97baaf48d2ba9a2",
     ["cts/io/<YOUR_USERNAME>/rnaseq/ref/annotation.gtf.gz"],   # one GTF (or GFF3 for gff3_to_gtf)
     "cts/io/<YOUR_USERNAME>/output/gffread/run1",
     cluster="kbase",
@@ -52,6 +52,7 @@ Input files must be in MinIO with CRC64NVME checksums (`aws s3 cp ... --checksum
 - GFF3 allows strand `?`, which gffread can't parse
 
 The rows removed are redundant gene rows and non-gene features such as origins of replication.
+
 ## Output
 
 - `normalize_gtf` → `normalized.gtf`: every transcript has `exon` rows (`CDS` rows are kept). Use it for BED conversion (RSeQC) and STAR index building
@@ -92,3 +93,4 @@ This wrapper builds on two projects. If you use it in your research, please cite
 > Firman, T., Bishop, E., et al. (2026). WILDS Docker Library [Computer software]. GitHub. https://doi.org/10.5281/zenodo.21383372
 
 Source: https://github.com/getwilds/wilds-docker-library
+
