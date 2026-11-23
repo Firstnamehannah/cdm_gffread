@@ -29,8 +29,8 @@ run "$PWD/test_in" normalize_gtf OUTPUT_PREFIX=ecoli.normalized "/in/$BACTERIA_G
 echo "   exons before: $(exons "test_in/$BACTERIA_GTF")   after: $(exons "$OUT/ecoli.normalized.gtf")"
  
 echo "== 2. Bacterial GFF → gff3_to_gtf → normalize_gtf"
-run "$PWD/test_in" gff3_to_gtf OUTPUT_PREFIX=ecoli_from_gff "/in/$BACTERIA_GFF"
-run "$OUT" normalize_gtf OUTPUT_PREFIX=ecoli_from_gff.normalized /in/ecoli_from_gff.gtf
+run "$PWD/test_in" gff3_to_gtf "/in/$BACTERIA_GFF"
+run "$OUT" normalize_gtf OUTPUT_PREFIX=ecoli_from_gff.normalized /in/converted.gtf
 echo "   exons before: $(exons "test_in/$BACTERIA_GFF")   after: $(exons "$OUT/ecoli_from_gff.normalized.gtf")"
  
 echo "== 3. Eukaryotic GTF → normalize_gtf (exons should stay about the same)"

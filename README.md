@@ -23,7 +23,7 @@ Each task is two commands (a filter, then gffread). CTS runs a single entrypoint
 
 ```python
 job = tscli.submit_job(
-    "ghcr.io/firstnamehannah/cdm_gffread:0.1.0@sha256:<digest>",
+    "ghcr.io/firstnamehannah/cdm_gffread:0.1.0@sha256:ea407cbb15265e4f5d56c9e18673d0e248752e5969638c0c4786567c95a506ce",
     ["cts/io/<you>/rnaseq/ref/annotation.gtf.gz"],   # one GTF (or GFF3 for gff3_to_gtf)
     "cts/io/<you>/output/gffread/run1",
     cluster="kbase",
@@ -45,7 +45,7 @@ Input files must be in MinIO with CRC64NVME checksums (`aws s3 cp ... --checksum
 
 **GFF3 input.** Run `gff3_to_gtf` first, then `normalize_gtf` on its `converted.gtf`. If a source offers both a GTF and a GFF3, use the GTF.
 
-**Why normalize.** STAR (GeneCounts) and RSeQC only count `exon` rows. NCBI bacterial annotations describe most genes with `CDS` rows only, so without this step those genes silently get zero counts. Eukaryotic GTFs that already have exons come through unchanged. This is important for downstream analysis in an RNA-seq pipeline.
+**Why normalize.** STAR (GeneCounts) and RSeQC only count `exon` rows. NCBI bacterial annotations describe most genes with `CDS` rows only, so without this step those genes silently get zero counts. Eukaryotic GTFs that already have exons come through unchanged.
 
 **Why the filters.** These are two gffread 0.12.7 quirks:
 - NCBI GTFs put `transcript_id ""` on `gene` rows, and gffread stops with `Error: no valid ID found for GFF record`.
