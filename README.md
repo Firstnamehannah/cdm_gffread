@@ -23,7 +23,7 @@ Each task is two commands (a filter, then gffread). CTS runs a single entrypoint
 
 ```python
 job = tscli.submit_job(
-    "ghcr.io/firstnamehannah/cdm_gffread:0.1.0@sha256:ea407cbb15265e4f5d56c9e18673d0e248752e5969638c0c4786567c95a506ce",
+    "ghcr.io/firstnamehannah/cdm_gffread:0.1.0@sha256:4852e2b8609ca2360b8c5d5757e1bf8af104b44327477bc4b97baaf48d2ba9a2",
     ["cts/io/<you>/rnaseq/ref/annotation.gtf.gz"],   # one GTF (or GFF3 for gff3_to_gtf)
     "cts/io/<you>/output/gffread/run1",
     cluster="kbase",
@@ -78,3 +78,17 @@ cd test && ./run_test.sh
 - a bacterial GFF3 (converted, then normalized),
 - a eukaryotic GTF (exon count should stay about the same),
 - no input file (should fail with a clear message).
+
+## Citation and license
+
+This wrapper builds on two projects. If you use it in your research, please cite both.
+
+**gffread** (the tool that does the work), MIT license ([LICENSE](https://github.com/gpertea/gffread/blob/master/LICENSE)):
+
+> Pertea G, Pertea M. GFF Utilities: GffRead and GffCompare. F1000Research 2020, 9:304. https://doi.org/10.12688/f1000research.23297.2
+
+**WILDS Docker Library** (the base image `getwilds/gffread:0.12.7`), MIT license ([LICENSE](https://github.com/getwilds/wilds-docker-library/blob/main/LICENSE)):
+
+> Firman, T., Bishop, E., et al. (2026). WILDS Docker Library [Computer software]. GitHub. https://doi.org/10.5281/zenodo.21383372
+
+Source: https://github.com/getwilds/wilds-docker-library
