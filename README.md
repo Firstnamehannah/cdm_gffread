@@ -83,7 +83,7 @@ cd test && ./run_test.sh
 
 This wrapper builds on two projects. If you use it in your research, please cite both.
 
-**gffread** (the tool that does the work), MIT license ([LICENSE](https://github.com/gpertea/gffread/blob/master/LICENSE)):
+**gffread** MIT license ([LICENSE](https://github.com/gpertea/gffread/blob/master/LICENSE)):
 
 > Pertea G, Pertea M. GFF Utilities: GffRead and GffCompare. F1000Research 2020, 9:304. https://doi.org/10.12688/f1000research.23297.2
 
