@@ -34,7 +34,7 @@ task="${1:-}"; shift || true
 case "$task" in
     gffread) exec gffread "$@" ;;
     normalize_gtf) default_prefix=normalized ;;
-    gff3_to_gtf) default_prefix=converted.gtf ;;
+    gff3_to_gtf) default_prefix=converted ;;
     *) echo "$usage" >&2; exit 2 ;;
 esac
 
